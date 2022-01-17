@@ -1,4 +1,4 @@
-module golang.design/x/tgstore
+module shaggyrec/tgstore
 
 go 1.16
 
