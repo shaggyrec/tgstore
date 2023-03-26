@@ -187,19 +187,19 @@ func (tgs *TGStore) load() {
 // Note that the returned id is not guaranteed for a fixed length.
 //
 // The lenth of the secretKey must be 16.
-func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Reader, ) (string, objectMetadata, error) {
+func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Reader) (string, objectMetadata, error) {
 	tgs.loadOnce.Do(tgs.load)
 	if tgs.loadError != nil {
-		return "",objectMetadata{}, tgs.loadError
+		return "", objectMetadata{}, tgs.loadError
 	}
 
 	aead, err := chacha20poly1305.New(secretKey)
 	if err != nil {
-		return "",objectMetadata{}, err
+		return "", objectMetadata{}, err
 	}
 
 	if content == nil {
-		return "0",objectMetadata{}, nil
+		return "0", objectMetadata{}, nil
 	}
 
 	metadata := objectMetadata{}
@@ -209,7 +209,7 @@ func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Rea
 				break
 			}
 
-			return "",metadata, err
+			return "", metadata, err
 		}
 
 		part := &countReader{
@@ -221,7 +221,7 @@ func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Rea
 
 		tgfID, err := tgs.uploadTelegramFile(ctx, aead, part)
 		if err != nil {
-			return "",metadata, err
+			return "", metadata, err
 		}
 
 		metadata.PartIDs = append(metadata.PartIDs, tgfID)
@@ -230,24 +230,24 @@ func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Rea
 
 	switch len(metadata.PartIDs) {
 	case 0:
-		return "0",metadata, nil
+		return "0", metadata, nil
 	case 1:
 		metadataJSON, err := json.Marshal(metadata)
 		if err != nil {
-			return "",metadata, err
+			return "", metadata, err
 		}
 
 		id := fmt.Sprint("0", metadata.PartIDs[0])
 		tgs.objectMetadataCache.Set(id, metadataJSON)
 
-		return id,metadata, nil
+		return id, metadata, nil
 	}
 
 	metadata.SplitSize = tgs.objectSplitSize
 
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
-		return "",metadata, err
+		return "", metadata, err
 	}
 
 	gzippedMetadataJSON := bytes.Buffer{}
@@ -255,19 +255,19 @@ func (tgs *TGStore) Upload(ctx context.Context, secretKey []byte, content io.Rea
 		&gzippedMetadataJSON,
 		gzip.BestCompression,
 	); err != nil {
-		return "",metadata, err
+		return "", metadata, err
 	} else if _, err := io.Copy(
 		gw,
 		bytes.NewReader(metadataJSON),
 	); err != nil {
-		return "",metadata, err
+		return "", metadata, err
 	} else if err := gw.Close(); err != nil {
-		return "",metadata, err
+		return "", metadata, err
 	}
 
 	tgfID, err := tgs.uploadTelegramFile(ctx, aead, &gzippedMetadataJSON)
 	if err != nil {
-		return "",metadata, err
+		return "", metadata, err
 	}
 
 	id := fmt.Sprint("1", tgfID)
@@ -650,4 +650,34 @@ func (cr *countReader) Read(b []byte) (int, error) {
 	n, err := cr.r.Read(b)
 	cr.c += int64(n)
 	return n, err
+}
+
+func (tgs *TGStore) UploadPhoto(from io.Reader) (string, error) {
+	tgs.loadOnce.Do(tgs.load)
+
+	if tgs.loadError != nil {
+		return "", tgs.loadError
+	}
+
+	m, err := tgs.bot.Send(
+		&telebot.Chat{ID: 506527952},
+		&telebot.Photo{File: telebot.FromReader(from)},
+	)
+
+	return m.Photo.FileID, err
+}
+
+func (tgs *TGStore) DownloadPhoto(fileId string) (io.ReadCloser, error) {
+	tgs.loadOnce.Do(tgs.load)
+
+	if tgs.loadError != nil {
+		return nil, tgs.loadError
+	}
+
+	res, err := tgs.requestTelegramFile(context.TODO(), fileId, nil)
+
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
