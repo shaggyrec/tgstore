@@ -464,7 +464,15 @@ Upload:
 		return "", err
 	}
 
-	return m.Document.FileID, nil
+	var fileId string
+
+	if m.Photo.FileID != "" {
+		fileId = m.Photo.FileID
+	} else {
+		fileId = m.Document.FileID
+	}
+
+	return fileId, nil
 }
 
 // requestTelegramFile requests the file targeted by the id from the Telegram.
