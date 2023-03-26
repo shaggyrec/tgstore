@@ -652,11 +652,13 @@ func (cr *countReader) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (tgs *TGStore) UploadPhoto(from io.Reader) (string, error) {
+func (tgs *TGStore) UploadPhoto(from io.Reader) (string, objectMetadata, error) {
 	tgs.loadOnce.Do(tgs.load)
 
+	var metadata objectMetadata
+
 	if tgs.loadError != nil {
-		return "", tgs.loadError
+		return "", metadata, tgs.loadError
 	}
 
 	m, err := tgs.bot.Send(
@@ -664,7 +666,10 @@ func (tgs *TGStore) UploadPhoto(from io.Reader) (string, error) {
 		&telebot.Photo{File: telebot.FromReader(from)},
 	)
 
-	return m.Photo.FileID, err
+	fileSize, err := tgs.sizeTelegramFile(context.TODO(), m.Photo.FileID)
+	metadata.Size = fileSize
+
+	return m.Photo.FileID, metadata, err
 }
 
 func (tgs *TGStore) DownloadPhoto(fileId string) (io.ReadCloser, error) {
