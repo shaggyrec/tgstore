@@ -666,6 +666,14 @@ func (tgs *TGStore) UploadPhoto(from io.Reader) (string, objectMetadata, error) 
 		&telebot.Photo{File: telebot.FromReader(from)},
 	)
 
+	if err != nil {
+		return "", metadata, err
+	}
+
+	if m == nil || m.Photo == nil || m.Photo.FileID == "" {
+		return "", metadata, errors.New("failed to upload photo")
+	}
+
 	fileSize, err := tgs.sizeTelegramFile(context.TODO(), m.Photo.FileID)
 	metadata.Size = fileSize
 
